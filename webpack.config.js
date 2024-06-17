@@ -1,46 +1,52 @@
 const path = require("path");
+const webpack = require("webpack");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
+const { CleanWebpackPlugin } = require("clean-webpack-plugin");
 
-module.exports = {
-  entry: "./src/index.js",
-  output: {
-    path: path.resolve(__dirname, "dist"),
-    filename: "bundle.js",
-    publicPath: "/",
-  },
-  module: {
-    rules: [
-      {
-        test: /\.(js|jsx)$/,
-        exclude: /node_modules/,
-        use: {
-          loader: "babel-loader",
-          options: {
-            presets: ["@babel/preset-env", "@babel/preset-react"],
-          },
-        },
-      },
-      {
-        test: /\.css$/i,
-        use: ["style-loader", "css-loader"],
-      },
-    ],
-  },
-  plugins: [
-    new HtmlWebpackPlugin({
-      template: "./public/index.html",
-    }),
-  ],
-  devServer: {
-    static: {
-      directory: path.join(__dirname, "dist"),
+module.exports = (env, argv) => {
+  const prod = argv.mode === "production";
+  return {
+    mode: prod ? "production" : "development",
+    devtool: prod ? "hidden-source-map" : "eval",
+    entry: "./src/index.tsx", // TypeScript 파일의 진입점 (tsx 확장자 사용)
+    output: {
+      path: path.resolve(__dirname, "dist"),
+      filename: "index.js",
     },
-    compress: true,
-    port: 3000,
-    open: true,
-    historyApiFallback: true,
-  },
-  resolve: {
-    extensions: [".js", ".jsx"],
-  },
+    module: {
+      rules: [
+        {
+          test: /\.(ts|tsx)$/,
+          exclude: /node_modules/,
+          use: ["babel-loader", "ts-loader"],
+        },
+        {
+          test: /\.css$/i,
+          use: ["style-loader", "css-loader"],
+        },
+      ],
+    },
+    plugins: [
+      new webpack.ProvidePlugin({
+        React: "react",
+      }),
+      new HtmlWebpackPlugin({
+        template: "./public/index.html",
+        minify: prod
+          ? {
+              collapseWhitespace: true, // 빈칸 제거
+              removeComments: true, // 주석 제거
+            }
+          : false,
+      }),
+      new CleanWebpackPlugin(),
+    ],
+    devServer: {
+      port: 3000,
+      hot: true,
+    },
+    resolve: {
+      extensions: [".js", ".jsx", ".ts", ".tsx"], // TypeScript 확장자 추가
+    },
+  };
 };
