@@ -1,223 +1,201 @@
-import { useState, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   DragDropContext,
-  Droppable,
-  Draggable,
   type DropResult,
+  type DragStart,
   type DragUpdate,
 } from "react-beautiful-dnd";
-
-const recipes = [
-  { id: "0", title: "기획" },
-  { id: "1", title: "디자인" },
-  { id: "2", title: "프론트엔드 개발" },
-  { id: "3", title: "백엔드 개발" },
-  { id: "4", title: "배포" },
-];
-
-type RecipeStatus = {
-  [key: string]: {
-    name: string;
-    items: { id: string; title: string }[];
-  };
-};
-
-const initialRecipeStatus: RecipeStatus = {
-  planning: {
-    name: "계획",
-    items: recipes,
-  },
-  preparation: {
-    name: "준비",
-    items: [],
-  },
-  action: {
-    name: "실행",
-    items: [],
-  },
-  completed: {
-    name: "완료",
-    items: [],
-  },
-};
-
-const isEven = (id: string) => parseInt(id, 10) % 2 === 0;
+import Column from "./components/Column";
+import type { Id, Result as ReorderResult } from "./types";
+import initialEntities from "./lib/data";
+import {
+  getTasks,
+  isEven,
+  multiSelectTo as multiSelect,
+  mutliDragAwareReorder,
+} from "./lib/utils";
 
 export default function App() {
-  const [columns, setColumns] = useState<RecipeStatus>(initialRecipeStatus);
-  const [isInvalidMove, setIsInvalidMove] = useState(false);
+  const [entities, setEntities] = useState(initialEntities);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Id[]>([]);
+  const [draggingTaskId, setdraggingTaskId] = useState<Id | null>(null);
+  const [isDragRestricted, setIsDragRestricted] = useState(false);
 
-  // 열 내 또는 열 간에 항목을 재정렬하는 함수
-  const reorder = (
-    status: RecipeStatus,
-    startDroppableId: string,
-    endDroppableId: string,
-    startIndex: number,
-    endIndex: number
-  ): RecipeStatus => {
-    const sourceColumn = status[startDroppableId];
-    const copiedStartItems = [...sourceColumn.items];
-    const [removed] = copiedStartItems.splice(startIndex, 1);
-    // 같은 열 내부에서 드롭할 경우
-    if (startDroppableId === endDroppableId) {
-      // 두 번째 제약:짝수 항목이 다른 짝수 항목 앞으로 이동하는 것을 방지합니다.
-      if (
-        isEven(removed.id) &&
-        endIndex < copiedStartItems.length &&
-        isEven(copiedStartItems[endIndex].id) &&
-        endIndex < startIndex
-      ) {
-        return status;
+  console.log(entities);
+  const toggleSelection = (taskId: Id) => {
+    const wasSelected = selectedTaskIds.includes(taskId);
+    const newTaskIds: Id[] = (() => {
+      // 작업이 이전에 선택되지 않았습니다. 이제 유일하게 선택된 항목이 됩니다.
+      if (!wasSelected) {
+        return [taskId];
       }
 
-      copiedStartItems.splice(endIndex, 0, removed);
-      return {
-        ...status,
-        [startDroppableId]: {
-          ...sourceColumn,
-          items: copiedStartItems,
-        },
-      };
-    }
-    // 다른 열로 드롭할 경우
+      // 작업이 선택했던 그룹의 일부였습니다. 이제 유일하게 선택된 항목이 됩니다.
+      if (selectedTaskIds.length > 1) {
+        return [taskId];
+      }
 
-    // 첫 번째 제약: 첫 번째 칼럼에서 세 번째 칼럼으로는 아이템 이동이 불가능
-    if (startDroppableId === "planning" && endDroppableId === "action") {
-      return status;
-    }
-    const destColumn = status[endDroppableId];
-    const copiedEndItems = [...destColumn.items];
-    // 두 번째 제약:짝수 항목이 다른 짝수 항목 앞으로 이동하는 것을 방지합니다.
-    if (
-      isEven(removed.id) &&
-      endIndex < copiedEndItems.length &&
-      isEven(copiedEndItems[endIndex].id)
-    ) {
-      return status;
-    }
-    copiedEndItems.splice(endIndex, 0, removed);
-    return {
-      ...status,
-      [startDroppableId]: {
-        ...sourceColumn,
-        items: copiedStartItems,
-      },
-      [endDroppableId]: {
-        ...destColumn,
-        items: copiedEndItems,
-      },
-    };
+      // 작업이 이전에 선택되었지만 그룹에 속하지 않았습니다. 선택을 취소합니다.
+      return [];
+    })();
+
+    setSelectedTaskIds(newTaskIds);
   };
-  const onDragEnd = useCallback((result: DropResult) => {
-    const { source, destination } = result;
-    if (!destination) return; // 드롭할 수 있는 영역 밖인지
 
+  const toggleSelectionInGroup = (taskId: Id) => {
+    const index = selectedTaskIds.indexOf(taskId);
+    // 선택하지 않은 경우 선택한 항목에 추가합니다.
+    if (index === -1) {
+      setSelectedTaskIds([...selectedTaskIds, taskId]);
+      return;
+    }
+    // 이전에 선택되었으므로 그룹에서 제거하는 과정입니다.
+    const shallow: Id[] = [...selectedTaskIds];
+    shallow.splice(index, 1);
+    setSelectedTaskIds(shallow);
+  };
+
+  const multiSelectTo = (newTaskId: Id) => {
+    const updated = multiSelect(entities, selectedTaskIds, newTaskId);
+    if (updated == null) {
+      return;
+    }
+    setSelectedTaskIds(updated);
+  };
+
+  const onDragStart = (start: DragStart) => {
+    const id: string = start.draggableId;
+    const selected = selectedTaskIds.find(
+      (taskId: Id): boolean => taskId === id
+    );
+    // 선택되지 않은 항목을 드래그하는 경우 모든 항목 선택 취소합니다.
+    if (!selected) {
+      unselectAll();
+    }
+    setIsDragRestricted(false);
+    setdraggingTaskId(start.draggableId);
+  };
+
+  const onDragUpdate = (update: DragUpdate) => {
+    const { source, destination, draggableId } = update;
+    if (!destination) {
+      setdraggingTaskId(null);
+      return;
+    }
     const { droppableId: sourceDroppableId, index: startIndex } = source;
     const { droppableId: destinationDroppableId, index: endIndex } =
       destination;
+    const isEvenInvalidMove =
+      isEven(draggableId.split("-")[1]) &&
+      endIndex < entities.columns[destinationDroppableId].taskIds.length &&
+      isEven(
+        entities.columns[destinationDroppableId].taskIds[endIndex].split("-")[1]
+      );
+    if (
+      sourceDroppableId === "backlog" &&
+      destinationDroppableId === "inProgress"
+    ) {
+      setIsDragRestricted(true);
+    } else if (
+      (sourceDroppableId === destinationDroppableId &&
+        isEvenInvalidMove &&
+        endIndex < startIndex) ||
+      (sourceDroppableId !== destinationDroppableId && isEvenInvalidMove)
+    ) {
+      setIsDragRestricted(true);
+    } else {
+      setIsDragRestricted(false);
+    }
+  };
 
+  const onDragEnd = (result: DropResult) => {
+    const { source, destination } = result;
+    // 드롭할 수 있는 영역 밖인지
+    if (!destination || result.reason === "CANCEL") {
+      setdraggingTaskId(null);
+      return;
+    }
+    // 첫 번째 열에서 세 번째 열로의 이동을 제한합니다.
+    if (
+      source.droppableId === "backlog" &&
+      destination.droppableId === "inProgress"
+    ) {
+      setIsDragRestricted(false);
+      setdraggingTaskId(null);
+      return;
+    }
     // 드래그 결과에 따라 재정렬 수행
-    setColumns((prevColumns) =>
-      reorder(
-        prevColumns,
-        sourceDroppableId,
-        destinationDroppableId,
-        startIndex,
-        endIndex
-      )
-    );
-    setIsInvalidMove(false);
+    const processed: ReorderResult = mutliDragAwareReorder({
+      entities,
+      selectedTaskIds,
+      source,
+      destination,
+    });
+    setEntities(processed.entities);
+    setSelectedTaskIds(processed.selectedTaskIds);
+    setdraggingTaskId(null);
+  };
+
+  const onWindowKeyDown = (event: KeyboardEvent) => {
+    if (event.defaultPrevented) {
+      return;
+    }
+
+    if (event.key === "Escape") {
+      unselectAll();
+    }
+  };
+
+  const onWindowClick = (event: MouseEvent) => {
+    if (event.defaultPrevented) {
+      return;
+    }
+    unselectAll();
+  };
+
+  const onWindowTouchEnd = (event: TouchEvent) => {
+    if (event.defaultPrevented) {
+      return;
+    }
+    unselectAll();
+  };
+
+  const unselectAll = () => {
+    setSelectedTaskIds([]);
+  };
+
+  useEffect(() => {
+    window.addEventListener("click", onWindowClick);
+    window.addEventListener("keydown", onWindowKeyDown);
+    window.addEventListener("touchend", onWindowTouchEnd);
+    return () => {
+      window.removeEventListener("click", onWindowClick);
+      window.removeEventListener("keydown", onWindowKeyDown);
+      window.removeEventListener("touchend", onWindowTouchEnd);
+    };
   }, []);
 
-  const onDragUpdate = useCallback(
-    (update: DragUpdate) => {
-      const { destination, source, draggableId } = update;
-
-      if (!destination) {
-        return;
-      }
-      const { droppableId: sourceDroppableId, index: startIndex } = source;
-      const { droppableId: destinationDroppableId, index: endIndex } =
-        destination;
-
-      const isEvenInvalidMove =
-        isEven(draggableId) &&
-        endIndex < columns[destinationDroppableId].items.length &&
-        isEven(columns[destinationDroppableId].items[endIndex].id);
-
-      if (
-        sourceDroppableId === "planning" &&
-        destinationDroppableId === "action"
-      ) {
-        setIsInvalidMove(true);
-      } else if (
-        // 같은 열 혹은 다른 열에로 짝수아이템이 짝수 아이템 앞으로 이동할 경우
-        (sourceDroppableId === destinationDroppableId &&
-          isEvenInvalidMove &&
-          endIndex < startIndex) ||
-        (sourceDroppableId !== destinationDroppableId && isEvenInvalidMove)
-      ) {
-        setIsInvalidMove(true);
-      } else {
-        setIsInvalidMove(false);
-      }
-    },
-    [columns]
-  );
-
   return (
-    <div className="bg-blue-300">
-      <h1 className="text-center text-3xl font-bold py-4">프로젝트 현황</h1>
+    <div className="bg-blue-300 py-12">
+      <h1 className="text-center text-3xl font-bold py-4">Project</h1>
       <div className="flex justify-center h-full">
-        <DragDropContext onDragEnd={onDragEnd} onDragUpdate={onDragUpdate}>
-          {Object.entries(columns).map(([columnId, column], index) => (
-            <div className="flex flex-col items-center" key={columnId}>
-              <h2 className="text-center text-xl font-semibold py-2">
-                {column.name}
-              </h2>
-              <div className="m-2">
-                <Droppable droppableId={columnId} key={columnId}>
-                  {(provided, snapshot) => (
-                    <div
-                      {...provided.droppableProps}
-                      ref={provided.innerRef}
-                      className={`p-1 w-[250px] min-h-[500px] ${
-                        snapshot.isDraggingOver ? "bg-slate-500" : "bg-gray-300"
-                      }`}
-                    >
-                      {column.items.map((item, index) => {
-                        return (
-                          <Draggable
-                            key={item.id}
-                            draggableId={item.id}
-                            index={index}
-                          >
-                            {(provided, snapshot) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                {...provided.dragHandleProps}
-                                className={`select-none p-4 mb-2 min-h-[50px] text-white ${
-                                  snapshot.isDragging
-                                    ? isInvalidMove
-                                      ? "bg-red-500"
-                                      : "bg-green-500"
-                                    : "bg-black"
-                                }`}
-                                style={provided.draggableProps.style}
-                              >
-                                {`${item.id}. ${item.title}`}
-                              </div>
-                            )}
-                          </Draggable>
-                        );
-                      })}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </div>
-            </div>
+        <DragDropContext
+          onDragEnd={onDragEnd}
+          onDragStart={onDragStart}
+          onDragUpdate={onDragUpdate}
+        >
+          {entities.columnOrder.map((columnId: Id) => (
+            <Column
+              key={columnId}
+              column={entities.columns[columnId]}
+              tasks={getTasks(entities, columnId)}
+              selectedTaskIds={selectedTaskIds}
+              draggingTaskId={draggingTaskId}
+              toggleSelection={toggleSelection}
+              toggleSelectionInGroup={toggleSelectionInGroup}
+              multiSelectTo={multiSelectTo}
+              isDragRestricted={isDragRestricted}
+            />
           ))}
         </DragDropContext>
       </div>
