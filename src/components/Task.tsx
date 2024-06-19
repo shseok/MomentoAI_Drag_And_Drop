@@ -110,23 +110,31 @@ export default function Task({
             ref={provided.innerRef}
             {...provided.draggableProps}
             {...provided.dragHandleProps}
-            className={`select-none p-4 mb-2 text-white ${
+            onClick={onClick}
+            onTouchEnd={onTouchEnd}
+            onKeyDown={(event) => onKeyDown(event, snapshot)}
+            className={`select-none p-4 mb-2 text-white rounded-md text-center text-lg relative focus:outline-none ${
               snapshot.isDragging && isDragRestricted
                 ? "bg-red-500"
                 : isSelected
                 ? "bg-green-500"
-                : isGhosting
-                ? "bg-red-500"
-                : "bg-blue-500"
+                : "bg-gray-400"
+            } ${snapshot.isDragging ? "shadow-task" : ""} ${
+              isGhosting ? "opacity-80" : ""
             }`}
             // style={provided.draggableProps.style}
-            onClick={onClick}
-            onTouchEnd={onTouchEnd}
-            onKeyDown={(event) => onKeyDown(event, snapshot)}
           >
             {task.content}
             {shouldShowSelectedCount ? (
-              <div className="">{selectionCount}</div>
+              <div
+                className={`absolute -right-2 -top-2 rounded-full size-[30px] text-center text-sm flex items-center justify-center ${
+                  snapshot.isDragging && isDragRestricted
+                    ? "bg-red-800"
+                    : "bg-green-800"
+                }`}
+              >
+                {selectionCount}
+              </div>
             ) : null}
           </div>
         );

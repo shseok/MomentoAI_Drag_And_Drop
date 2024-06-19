@@ -176,9 +176,9 @@ export default function App() {
   }, []);
 
   return (
-    <div className="bg-blue-300 py-12">
-      <h1 className="text-center text-3xl font-bold py-4">Project</h1>
-      <div className="flex justify-center h-full">
+    <div className="h-full flex flex-col items-center justify-center py-2">
+      <h1 className="text-center text-3xl font-bold mb-8">Project</h1>
+      <div className="flex justify-center w-[90%] max-w-[1000px] mb-4">
         <DragDropContext
           onDragEnd={onDragEnd}
           onDragStart={onDragStart}
