@@ -14,9 +14,13 @@ import {
   multiSelectTo as multiSelect,
   mutliDragAwareReorder,
 } from "./lib/utils";
+import useLocalStorage from "./hooks/useLocalStorage";
 
 export default function App() {
-  const [entities, setEntities] = useState(initialEntities);
+  // 로컬 스토리지가 있는 경우 로컬 스토리지에서 값 가져오기
+  const [records, setRecords] = useLocalStorage("entities", initialEntities);
+  // 로컬 스토리지에서 받은 값을 로컬 상태로 설정합니다.
+  const [entities, setEntities] = useState(records);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Id[]>([]);
   const [draggingTaskId, setdraggingTaskId] = useState<Id | null>(null);
   const [isDragRestricted, setIsDragRestricted] = useState(false);
@@ -132,6 +136,7 @@ export default function App() {
       destination,
     });
     setEntities(processed.entities);
+    setRecords(processed.entities);
     setSelectedTaskIds(processed.selectedTaskIds);
     setdraggingTaskId(null);
   };
@@ -162,6 +167,14 @@ export default function App() {
 
   const unselectAll = () => {
     setSelectedTaskIds([]);
+  };
+
+  const onClickButton = () => {
+    setEntities(initialEntities);
+    setRecords(initialEntities);
+    unselectAll();
+    setdraggingTaskId(null);
+    setIsDragRestricted(false);
   };
 
   useEffect(() => {
@@ -199,6 +212,13 @@ export default function App() {
           ))}
         </DragDropContext>
       </div>
+      <button
+        type="button"
+        className="w-[88%] max-w-[980px] inline-flex select-none items-center justify-center whitespace-nowrap rounded-md align-middle font-semibold leading-tight outline-none outline-offset-2 transition h-10 min-h-11 text-lg bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700"
+        onClick={onClickButton}
+      >
+        Reset
+      </button>
     </div>
   );
 }
