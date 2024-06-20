@@ -25,7 +25,6 @@ export default function App() {
   const [draggingTaskId, setdraggingTaskId] = useState<Id | null>(null);
   const [isDragRestricted, setIsDragRestricted] = useState(false);
 
-  console.log(entities);
   const toggleSelection = (taskId: Id) => {
     const wasSelected = selectedTaskIds.includes(taskId);
     const newTaskIds: Id[] = (() => {

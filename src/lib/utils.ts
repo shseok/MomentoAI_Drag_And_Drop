@@ -265,7 +265,7 @@ export const multiSelectTo = (
   // 항상 선택되는 시작 및 끝 값을 제외하고 사이에 있는(inBetween) 모든 항목은 선택을 토글해야 합니다.
 
   const toAdd: Id[] = inBetween.filter((taskId: Id): boolean => {
-    // if already selected: then no need to select it again
+    // 이미 선택한 경우: 다시 선택할 필요가 없습니다.
     if (selectedTaskIds.includes(taskId)) {
       return false;
     }

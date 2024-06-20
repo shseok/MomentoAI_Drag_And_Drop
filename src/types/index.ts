@@ -30,7 +30,6 @@ export type Entities = {
 
 export type Result = {
   entities: Entities;
-  // a drop operations can change the order of the selected task array
   selectedTaskIds: Id[];
 };
 

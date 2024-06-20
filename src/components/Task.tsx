@@ -122,7 +122,6 @@ export default function Task({
             } ${snapshot.isDragging ? "shadow-task" : ""} ${
               isGhosting ? "opacity-80" : ""
             }`}
-            // style={provided.draggableProps.style}
           >
             {task.content}
             {shouldShowSelectedCount ? (
